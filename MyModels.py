@@ -106,6 +106,40 @@ class KNN():
         return majority_class
 
 
+class PCA():
+    def __init__(self, num_components):
+        self.num_components = num_components
+        self.components  = None
+        self.mean = None
+        self.variance_share = None
+        
+    
+    def fit(self, X):
+        #  Centering the data here
+        self.mean = np.mean(X, axis=0)
+        X -= self.mean
+        
+        # Finding the Covariance and eigenvalues and eigenvectors
+        cov_maxtrix = np.cov(X.T)
+        values, vectors = np.linalg.eig(cov_maxtrix)
+        
+        # Sorting eigenvalues and eigenvectors
+        sort_idx = np.argsort(values)[::-1]
+        values = values[sort_idx]
+        vectors = vectors[:, sort_idx]
+        
+        # selecting the important directions and 
+        # calculating how much of the dataset's variance they cover.
+        self.components  = vectors[:self.num_components]
+        self.variance_share = np.sum(values[:self.num_components]) / np.sum(values)
+    
+    def transform(self, X):
+        # Data centering
+        X -= self.mean
+        #  Decomposition
+        return np.dot(X, self.components.T)
+        
+    
 class LogisticRegression():
     def best_fit(self, x, y, rg, epochs, lr):
         X = np.array(x)
