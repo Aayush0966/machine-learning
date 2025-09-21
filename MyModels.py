@@ -1,3 +1,4 @@
+from contextlib import AsyncExitStack
 import numpy as np
 
 
@@ -138,6 +139,64 @@ class PCA():
         X -= self.mean
         #  Decomposition
         return np.dot(X, self.components.T)
+
+class LDA():
+    def __init__(self, n_components=None):
+        self.n_components = n_components
+        self.W = None
+        self.eigenvalues = None
+        
+    def fit(self, x, y):
+        n_samples, n_features = x.shape
+        classes = np.unique(y)
+        n_classes = len(classes)
+        
+        overall_mean = x.mean(axis=0)
+        
+        S_W = np.zeros((n_features, n_features))
+        S_B = np.zeros((n_features, n_features))
+        
+        for c in classes:
+            x_c = x[y==c]
+            x_c_mean = x_c.mean(axis=0)
+            n_c = x_c.shape[0]
+            
+            
+            # within class scatter
+            S_W += (x_c - x_c_mean).T @ (x_c - x_c_mean)
+            
+            # between class scatter
+            mean_diff = (x_c_mean - overall_mean).reshape(n_features,1)
+            S_B += n_c * (mean_diff @ mean_diff.T)
+            
+        
+        # solve generalized eigenvalue problem
+        
+        eigvals, eigvecs = np.linalg.eig(np.linalg.pinv(S_W) @ S_B)
+        
+        sorted_indices = np.argsort(np.real(eigvals))[::-1]
+        eigvals= np.real(eigvals[sorted_indices])
+        eigvecs = np.real(eigvecs[:, sorted_indices])
+        
+        if self.n_components is None:
+            self.n_components = min(n_classes -1, n_features)
+        
+        self.W = eigvecs[:, :self.n_components]
+        self.eigenvalues = eigvals[:self.n_components]
+
+        return self
+
+            
+        
+    def transform(self, X):
+        if self.W is None:
+            raise RuntimeError("You must fit the model before transforming data!")
+        return X @ self.W
+
+    def fit_transform(self, X, y):
+        self.fit(X, y)
+        return self.transform(X)
+        
         
     
 class LogisticRegression():
