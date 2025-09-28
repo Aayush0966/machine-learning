@@ -106,6 +106,55 @@ class KNN():
         majority_class = max(set(classes), key=classes.count)
         return majority_class
 
+class NaiveBayesClassifier:
+    def __init__(self, X_cat, X_cont, y, test_cat, test_cont):
+        self.X_cat = X_cat
+        self.X_cont = X_cont
+        self.y = y
+        self.test_cat = test_cat
+        self.test_cont = test_cont
+        self.classes = None
+        self.priors = {}
+        self.likelihood = {}
+        self.probs = {}
+
+    def calc_priors(self):
+        classes, counts = np.unique(self.y, return_counts=True)
+        self.classes = classes
+        self.priors = {cls: count / len(self.y) for cls, count in zip(classes, counts)}
+        return self
+
+    def calc_likelihood(self):
+        likelihood_cont = {}
+        likelihood_cat = {}
+        for cls in self.classes:
+            cont_vals = self.X_cont[self.y == cls]
+            cat_vals = self.X_cat[self.y == cls]
+
+            # Categorical likelihood
+            likelihood_cat[cls] = np.sum(cat_vals == self.test_cat) / len(cat_vals)
+
+            # Continuous likelihood (Gaussian)
+            mu = np.mean(cont_vals)
+            var = np.var(cont_vals)
+            likelihood_cont[cls] = (1 / np.sqrt(2 * np.pi * var)) * np.exp(- (self.test_cont - mu)**2 / (2 * var))
+
+        self.likelihood['cont'] = likelihood_cont
+        self.likelihood['cat'] = likelihood_cat
+        return self
+
+    def calc_probs(self):
+        self.calc_priors()
+        self.calc_likelihood()
+        self.probs = {}
+        for cls in self.classes:
+            self.probs[cls] = self.priors[cls] * self.likelihood['cont'][cls] * self.likelihood['cat'][cls]
+        return self
+
+    def predict(self):
+        if not self.probs:
+            self.calc_probs()
+        return max(self.probs, key=self.probs.get)
 
 class PCA():
     def __init__(self, num_components):
