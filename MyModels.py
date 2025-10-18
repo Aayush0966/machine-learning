@@ -356,3 +356,140 @@ class LogisticRegression:
     def classify(self, w, x, b, threshold=0.5):
         prediction = self.predict(w, x, b)
         return (prediction >= threshold).astype(int)
+
+
+class DecisionTree:
+    def __init__(self):
+        self.tree = None
+
+    def gini_impurity(self, y):
+        classes, count = np.unique(y, return_counts=True)
+        probs = count / len(y)
+        return 1 - np.sum(probs ** 2)
+
+    def info_gain(self, y, feature):
+        parent_gain = self.gini_impurity(y)
+        best_gain = -1
+        best_thresh = None
+
+        unique_features = np.unique(feature)
+        if len(unique_features) == 1:
+            return 0, unique_features[0]
+
+        thresholds = (unique_features[:-1] + unique_features[1:]) / 2
+
+        for t in thresholds:
+            left_y = y[feature <= t]
+            right_y = y[feature > t]
+            if len(left_y) == 0 or len(right_y) == 0:
+                continue
+
+            weighted_gini = (len(left_y) / len(y)) * self.gini_impurity(left_y) + \
+                            (len(right_y) / len(y)) * self.gini_impurity(right_y)
+
+            gain = parent_gain - weighted_gini
+
+            if gain > best_gain:
+                best_thresh = t
+                best_gain = gain
+
+        return best_gain, best_thresh
+
+    def best_split(self, y, X):
+        best_gain = -1
+        best_feature_idx = None
+        best_threshold = None
+
+        for i in range(X.shape[1]):
+            gain, thresh = self.info_gain(y, X[:, i])
+            if gain > best_gain:
+                best_gain = gain
+                best_feature_idx = i
+                best_threshold = thresh
+
+        return best_feature_idx, best_threshold
+
+    def build_tree(self, y, X):
+        if len(np.unique(y)) == 1:
+            return int(y[0])
+
+        idx, threshold = self.best_split(y, X)
+        if idx is None:
+            return int(np.round(np.mean(y)))
+
+        left_mask = X[:, idx] <= threshold
+        right_mask = X[:, idx] > threshold
+
+        tree = {
+            "feature_idx": idx,
+            "threshold": threshold,
+            "branches": {
+                "left": self.build_tree(y[left_mask], X[left_mask]),
+                "right": self.build_tree(y[right_mask], X[right_mask]),
+            }
+        }
+        return tree
+
+    def fit(self, X, y):
+        self.tree = self.build_tree(y, X)
+
+    def predict(self, sample, tree=None):
+        if tree is None:
+            tree = self.tree
+        if isinstance(tree, int):
+            return tree
+        idx = tree["feature_idx"]
+        threshold = tree["threshold"]
+        if sample[idx] <= threshold:
+            return self.predict(sample, tree["branches"]["left"])
+        else:
+            return self.predict(sample, tree["branches"]["right"])
+
+    def predict_all(self, X):
+        return np.array([self.predict(x) for x in X])
+
+class RandomForest:
+    def __init__(self, n_trees=5, max_features=None):
+        self.n_trees = n_trees
+        self.trees = []
+        self.max_features = max_features
+        
+    
+    def fit(self, X, y):
+        self.trees = []
+        n_samples = X.shape[0]
+        
+        for _ in range(self.n_trees):
+            idxs = np.random.choice(n_samples, n_samples, replace=True)
+            X_sample = X[idxs]
+            y_sample = y[idxs]
+            
+            if self.max_features is not None:
+                feature_idx = np.random.choice(X.shape[1], self.max_features, replace=False)
+                X_sample = X_sample[:, feature_idx]
+            else:
+                feature_idx = np.arange(X.shape[1])
+                
+            
+            tree_obj = DecisionTree()
+            tree_obj.fit(X_sample, y_sample)
+            self.trees.append((tree_obj, feature_idx))
+    
+    def predict(self, X):
+        tree_preds = []
+        
+        for tree_obj, feature_idx in self.trees:
+            X_subsets = X[:, feature_idx]
+            preds = tree_obj.predict_all(X_subsets)
+            tree_preds.append(preds)
+        
+        tree_preds = np.array(tree_preds)
+        y_pred = []
+        for i in range(X.shape[0]):
+            counts = np.bincount(tree_preds[:, i])
+            y_pred.append(np.argmax(counts))
+        
+        return np.array(y_pred)
+        
+        
+        
